@@ -36,7 +36,6 @@ public class GoogleContactsService {
                 return token;
             }
         }
-
         throw new RuntimeException("OAuth2 authentication failed!");
     }
 
@@ -49,75 +48,105 @@ public class GoogleContactsService {
     public List<Person> getContacts() throws IOException {
         try {
             PeopleService peopleService = this.createPeopleService();
-            ListConnectionsResponse response = (ListConnectionsResponse)peopleService.people().connections().list("people/me").setPersonFields("names,emailAddresses,phoneNumbers").execute();
-            List<Person> contacts = response.getConnections() != null ? response.getConnections() : new ArrayList();
-            System.out.println("Fetched Contacts Count: " + ((List)contacts).size());
-            return (List)contacts;
-        } catch (IOException var4) {
-            IOException e = var4;
+            ListConnectionsResponse response = peopleService.people().connections()
+                    .list("people/me")
+                    .setPersonFields("names,emailAddresses,phoneNumbers")
+                    .execute();
+            List<Person> contacts = response.getConnections() != null ? response.getConnections() : new ArrayList<>();
+            System.out.println("Fetched Contacts Count: " + contacts.size());
+            return contacts;
+        } catch (IOException e) {
             e.printStackTrace();
             System.err.println("Error fetching contacts: " + e.getMessage());
             throw new IOException("Failed to retrieve contacts from Google People API", e);
         }
     }
 
-    public Person createContact(String givenName, String familyName, String email, String phoneNumber) throws IOException {
+    public Person createContact(String givenName, String familyName, String[] emails, String[] phoneNumbers) throws IOException {
         try {
             PeopleService peopleService = this.createPeopleService();
             Person newPerson = new Person();
+
+
             Name name = new Name();
             name.setGivenName(givenName);
             name.setFamilyName(familyName);
             newPerson.setNames(List.of(name));
-            if (email != null && !email.isEmpty()) {
-                EmailAddress emailAddress = new EmailAddress();
-                emailAddress.setValue(email);
-                newPerson.setEmailAddresses(List.of(emailAddress));
+
+            if (emails != null && emails.length > 0) {
+                List<EmailAddress> emailAddresses = new ArrayList<>();
+                for (String email : emails) {
+                    if (email != null && !email.trim().isEmpty()) {
+                        emailAddresses.add(new EmailAddress().setValue(email));
+                    }
+                }
+                if (!emailAddresses.isEmpty()) {
+                    newPerson.setEmailAddresses(emailAddresses);
+                }
             }
 
-            if (phoneNumber != null && !phoneNumber.isEmpty()) {
-                PhoneNumber phone = new PhoneNumber();
-                phone.setValue(phoneNumber);
-                newPerson.setPhoneNumbers(List.of(phone));
+            if (phoneNumbers != null && phoneNumbers.length > 0) {
+                List<PhoneNumber> phoneNumberList = new ArrayList<>();
+                for (String phoneNumber : phoneNumbers) {
+                    if (phoneNumber != null && !phoneNumber.trim().isEmpty()) {
+                        phoneNumberList.add(new PhoneNumber().setValue(phoneNumber));
+                    }
+                }
+                if (!phoneNumberList.isEmpty()) {
+                    newPerson.setPhoneNumbers(phoneNumberList);
+                }
             }
 
-            Person createdPerson = (Person)peopleService.people().createContact(newPerson).execute();
+            Person createdPerson = peopleService.people().createContact(newPerson).execute();
             System.out.println("Created Contact ID: " + createdPerson.getResourceName());
             return createdPerson;
-        } catch (IOException var9) {
-            IOException e = var9;
+        } catch (IOException e) {
             e.printStackTrace();
             System.err.println("Error creating contact: " + e.getMessage());
             throw new IOException("Failed to create contact using Google People API", e);
         }
     }
 
-    public void updateContact(String resourceName, String givenName, String familyName, String email, String phoneNumber) throws IOException {
+    public void updateContact(String resourceName, String givenName, String familyName, String[] emails, String[] phoneNumbers) throws IOException {
         try {
             PeopleService peopleService = this.createPeopleService();
-            Person existingContact = (Person)peopleService.people().get(resourceName).setPersonFields("names,emailAddresses,phoneNumbers").execute();
+            Person existingContact = peopleService.people().get(resourceName)
+                    .setPersonFields("names,emailAddresses,phoneNumbers")
+                    .execute();
             String etag = existingContact.getEtag();
-            List<Name> names = new ArrayList();
-            names.add((new Name()).setGivenName(givenName).setFamilyName(familyName));
-            List<EmailAddress> emailAddresses = new ArrayList();
-            if (email != null && !email.isEmpty()) {
-                emailAddresses.add((new EmailAddress()).setValue(email));
-            }
-
-            List<PhoneNumber> phoneNumbers = new ArrayList();
-            if (phoneNumber != null && !phoneNumber.isEmpty()) {
-                phoneNumbers.add((new PhoneNumber()).setValue(phoneNumber));
-            }
 
             Person updatedContact = new Person();
             updatedContact.setEtag(etag);
+
+            List<Name> names = new ArrayList<>();
+            names.add(new Name().setGivenName(givenName).setFamilyName(familyName));
             updatedContact.setNames(names);
+
+            List<EmailAddress> emailAddresses = new ArrayList<>();
+            if (emails != null && emails.length > 0) {
+                for (String email : emails) {
+                    if (email != null && !email.trim().isEmpty()) {
+                        emailAddresses.add(new EmailAddress().setValue(email));
+                    }
+                }
+            }
             updatedContact.setEmailAddresses(emailAddresses);
-            updatedContact.setPhoneNumbers(phoneNumbers);
-            peopleService.people().updateContact(resourceName, updatedContact).setUpdatePersonFields("names,emailAddresses,phoneNumbers").execute();
+
+            List<PhoneNumber> phoneNumberList = new ArrayList<>();
+            if (phoneNumbers != null && phoneNumbers.length > 0) {
+                for (String phoneNumber : phoneNumbers) {
+                    if (phoneNumber != null && !phoneNumber.trim().isEmpty()) {
+                        phoneNumberList.add(new PhoneNumber().setValue(phoneNumber));
+                    }
+                }
+            }
+            updatedContact.setPhoneNumbers(phoneNumberList);
+
+            peopleService.people().updateContact(resourceName, updatedContact)
+                    .setUpdatePersonFields("names,emailAddresses,phoneNumbers")
+                    .execute();
             System.out.println("Contact updated successfully: " + resourceName);
-        } catch (IOException var13) {
-            IOException e = var13;
+        } catch (IOException e) {
             System.err.println("Error updating contact: " + e.getMessage());
             throw new IOException("Failed to update contact in Google People API", e);
         }
@@ -128,8 +157,7 @@ public class GoogleContactsService {
             PeopleService peopleService = this.createPeopleService();
             peopleService.people().deleteContact(resourceName).execute();
             System.out.println("Contact deleted successfully: " + resourceName);
-        } catch (IOException var3) {
-            IOException e = var3;
+        } catch (IOException e) {
             System.err.println("Error deleting contact: " + e.getMessage());
             throw new IOException("Failed to delete contact in Google People API", e);
         }
